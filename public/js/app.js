@@ -84,7 +84,30 @@
     window.SecureChatSocket.emit("get-sessions");
   }
 
+  function isSocketConnected() {
+    const socket = window.SecureChatSocket.getSocket();
+    return Boolean(socket && socket.connected);
+  }
+
+  function ensureSocketConnected(actionLabel) {
+    if (isSocketConnected()) {
+      return true;
+    }
+
+    finishRequest();
+    window.SecureChatUI.showToast(
+      `${actionLabel} impossible: backend Socket indisponible (${window.SecureChatSocket.getSocketUrl()}).`,
+      "error",
+      5000
+    );
+    return false;
+  }
+
   function joinPublicSession(sessionId) {
+    if (!ensureSocketConnected("Join session")) {
+      return;
+    }
+
     window.SecureChatUI.setLoading(true);
     startRequestTimeout("Join session");
 
@@ -95,6 +118,10 @@
   }
 
   function joinPrivateSession(sessionId, password) {
+    if (!ensureSocketConnected("Join private session")) {
+      return;
+    }
+
     window.SecureChatUI.setLoading(true);
     startRequestTimeout("Join private session");
     state.privateSessionPasswords.set(sessionId, password);
@@ -134,6 +161,10 @@
     const content = input.value.trim();
 
     if (!content) {
+      return;
+    }
+
+    if (!ensureSocketConnected("Envoi message")) {
       return;
     }
 
@@ -215,6 +246,17 @@
       state.isConnected = false;
       finishRequest();
       window.SecureChatUI.showToast("Disconnected. Reconnecting...", "warning");
+    });
+
+    window.SecureChatSocket.on("connect_error", (error) => {
+      state.isConnected = false;
+      finishRequest();
+      const detail = error && error.message ? ` (${error.message})` : "";
+      window.SecureChatUI.showToast(
+        `Connexion Socket impossible vers ${window.SecureChatSocket.getSocketUrl()}${detail}`,
+        "error",
+        7000
+      );
     });
 
     window.SecureChatSocket.onManager("reconnect", () => {
@@ -412,6 +454,10 @@
     window.SecureChatSessions.init({
       notify: (message, type) => window.SecureChatUI.showToast(message, type || "info"),
       onCreatePrivateSession: ({ durationMinutes, maxParticipants }) => {
+        if (!ensureSocketConnected("Création session privée")) {
+          return;
+        }
+
         window.SecureChatUI.setLoading(true);
         startRequestTimeout("Create private session");
 
@@ -428,6 +474,10 @@
         joinPublicSession(sessionId);
       },
       onLeaveSession: ({ sessionId }) => {
+        if (!ensureSocketConnected("Leave session")) {
+          return;
+        }
+
         window.SecureChatSocket.emit("leave-session", {
           sessionId,
           userId: state.userId,

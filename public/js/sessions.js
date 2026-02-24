@@ -204,6 +204,7 @@
   function bindSidebarControls() {
     const openButton = document.getElementById("menuToggleBtn");
     const closeButton = document.getElementById("closeSidebarBtn");
+    const sidebar = document.getElementById("sidebar");
 
     if (openButton) {
       openButton.addEventListener("click", () => {
@@ -216,6 +217,33 @@
         window.SecureChatUI.setSidebarOpen(false);
       });
     }
+
+    document.addEventListener("click", (event) => {
+      if (window.innerWidth >= 1024) {
+        return;
+      }
+
+      if (!sidebar || sidebar.classList.contains("mobile-hidden")) {
+        return;
+      }
+
+      const clickedInsideSidebar = sidebar.contains(event.target);
+      const clickedOpenButton = openButton ? openButton.contains(event.target) : false;
+
+      if (clickedInsideSidebar || clickedOpenButton) {
+        return;
+      }
+
+      window.SecureChatUI.setSidebarOpen(false);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || window.innerWidth >= 1024) {
+        return;
+      }
+
+      window.SecureChatUI.setSidebarOpen(false);
+    });
   }
 
   function bindLeaveButton() {

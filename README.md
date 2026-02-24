@@ -9,6 +9,23 @@ npm install
 npm run dev
 ```
 
+## Deploy Netlify (Frontend) + Socket Server (Backend)
+
+Netlify does not host your long-lived Socket.IO server in this setup.
+
+1. Deploy frontend with:
+- `Publish directory: public`
+- `netlify.toml` is already configured.
+
+2. Deploy backend (`server/server.js`) on Render/Railway/Fly/VM.
+
+3. Configure the frontend backend URL:
+- Open once with `?socketUrl=https://your-backend.example.com`
+- Example: `https://your-netlify-site.netlify.app/?socketUrl=https://your-backend.example.com`
+- The URL is saved in browser storage and reused automatically.
+
+4. Ensure backend CORS allows your Netlify domain.
+
 ## Environment
 
 ```env

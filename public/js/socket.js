@@ -1,5 +1,10 @@
 ﻿(() => {
+  const STORAGE_SOCKET_URL_KEY = "securechat_socket_url";
+  const QUERY_SOCKET_URL_KEY = "socketUrl";
+
   let socket = null;
+  let activeSocketUrl = "";
+
   const eventHandlers = new Map();
   const managerHandlers = new Map();
 
@@ -19,6 +24,64 @@
         socket.io.on(eventName, handler);
       });
     });
+  }
+
+  function normalizeSocketUrl(input) {
+    const raw = String(input || "").trim();
+
+    if (!raw) {
+      return "";
+    }
+
+    return raw.replace(/\/+$/, "");
+  }
+
+  function safeReadStorage(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function safeWriteStorage(key, value) {
+    try {
+      if (!value) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+
+      window.localStorage.setItem(key, value);
+    } catch (_error) {
+      // Ignore storage failure.
+    }
+  }
+
+  function resolveSocketUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = normalizeSocketUrl(params.get(QUERY_SOCKET_URL_KEY));
+
+    if (fromQuery) {
+      safeWriteStorage(STORAGE_SOCKET_URL_KEY, fromQuery);
+      return fromQuery;
+    }
+
+    const fromStorage = normalizeSocketUrl(safeReadStorage(STORAGE_SOCKET_URL_KEY));
+
+    if (fromStorage) {
+      return fromStorage;
+    }
+
+    const fromWindowConfig =
+      window.SECURECHAT_CONFIG && window.SECURECHAT_CONFIG.SOCKET_URL
+        ? normalizeSocketUrl(window.SECURECHAT_CONFIG.SOCKET_URL)
+        : "";
+
+    if (fromWindowConfig) {
+      return fromWindowConfig;
+    }
+
+    return normalizeSocketUrl(window.location.origin);
   }
 
   function addHandler(store, eventName, handler, binder) {
@@ -62,7 +125,10 @@
       return socket;
     }
 
-    socket = io({
+    activeSocketUrl = resolveSocketUrl();
+
+    socket = io(activeSocketUrl, {
+      path: "/socket.io",
       auth: {
         userId,
       },
@@ -96,11 +162,31 @@
     socket = null;
   }
 
+  function setSocketUrl(url, persist = true) {
+    const normalized = normalizeSocketUrl(url);
+
+    activeSocketUrl = normalized;
+
+    if (persist) {
+      safeWriteStorage(STORAGE_SOCKET_URL_KEY, normalized);
+    }
+
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+    }
+  }
+
+  function getSocketUrl() {
+    return activeSocketUrl || resolveSocketUrl();
+  }
+
   window.SecureChatSocket = {
     connect,
     disconnect,
     emit,
     getSocket: () => socket,
+    getSocketUrl,
     off: (eventName, handler) => {
       removeHandler(eventHandlers, eventName, handler, (evt, fn) => socket.off(evt, fn));
     },
@@ -113,5 +199,6 @@
     onManager: (eventName, handler) => {
       addHandler(managerHandlers, eventName, handler, (evt, fn) => socket.io.on(evt, fn));
     },
+    setSocketUrl,
   };
 })();

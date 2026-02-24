@@ -26,6 +26,16 @@ body {
   color: var(--text-main);
 }
 
+body {
+  overflow-x: hidden;
+}
+
+.app-frame {
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
 input,
 textarea {
   user-select: text;
@@ -51,10 +61,11 @@ textarea {
 
 .app-shell {
   min-height: calc(100vh - 2rem);
+  width: 100%;
 }
 
 .sidebar {
-  width: 320px;
+  width: clamp(260px, 26vw, 340px);
   transition: transform 0.28s ease;
 }
 
@@ -193,7 +204,7 @@ textarea {
 
 @media (max-width: 1023px) {
   .sidebar {
-    width: 280px;
+    width: min(86vw, 320px);
     position: fixed;
     left: 0.75rem;
     top: 0.75rem;
@@ -207,8 +218,43 @@ textarea {
 }
 
 @media (max-width: 767px) {
+  .app-shell {
+    min-height: calc(100vh - 1rem);
+  }
+
   .message-bubble {
     max-width: 85%;
+  }
+
+  #messagesContainer {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  #messageForm {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    padding-bottom: calc(0.85rem + env(safe-area-inset-bottom));
+  }
+
+  .chat-header {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .message-bubble {
+    max-width: 90%;
+    padding: 0.62rem 0.75rem;
+  }
+
+  #messageInput {
+    font-size: 0.88rem;
+  }
+
+  #sendMessageBtn {
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
   }
 }
 
