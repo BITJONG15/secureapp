@@ -1,0 +1,315 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ENTRE-NOUS</title>
+    <meta name="description" content="SecureChat real-time secure messaging" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      integrity="sha512-SnH5WK+bZxgPHs44uWix+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkR4j8IQxG7n4RkP4Ydv+Q7iP8R7v3L8X6jQ=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div id="bootOverlay" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/90 p-4">
+      <div class="glass-panel w-full max-w-md rounded-2xl p-6 text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20 text-blue-300">
+          <i class="fa-solid fa-shield-halved text-2xl"></i>
+        </div>
+        <h1 class="mb-2 text-xl font-semibold tracking-wide">ENTRE-NOUS</h1>
+        <p id="bootStatus" class="text-sm text-slate-300">Initializing secure environment...</p>
+        <div class="mt-5 h-2 overflow-hidden rounded-full bg-slate-700/70">
+          <div id="bootProgress" class="h-full w-0 rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-700"></div>
+        </div>
+        <p id="bootTimer" class="mt-3 text-xs text-slate-400">0%</p>
+      </div>
+    </div>
+
+    <div id="globalLoader" class="fixed inset-0 z-[110] hidden items-center justify-center bg-slate-900/60">
+      <div class="glass-panel rounded-xl px-4 py-3 text-sm text-slate-200">
+        <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+        Processing...
+      </div>
+    </div>
+
+    <div class="p-3 md:p-4">
+      <div class="app-shell flex gap-3 md:gap-4">
+        <aside id="sidebar" class="sidebar glass-panel mobile-hidden rounded-2xl p-4 lg:translate-x-0">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-lg font-semibold">Sessions</h2>
+            <button id="closeSidebarBtn" class="text-slate-400 lg:hidden" type="button" aria-label="Close menu">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="mb-4 rounded-xl border border-white/10 bg-slate-900/30 p-3">
+            <div class="text-xs uppercase tracking-wide text-slate-400">User ID</div>
+            <div id="userIdDisplay" class="font-mono-ui mt-1 text-sm text-blue-300"></div>
+          </div>
+
+          <div class="mb-4 grid grid-cols-2 gap-2">
+            <button
+              id="openCreateModalBtn"
+              type="button"
+              class="rounded-lg border border-blue-400/40 bg-blue-500/20 px-2 py-2 text-xs text-blue-200 transition hover:scale-[1.02]"
+            >
+              <i class="fa-solid fa-plus"></i>
+              <span class="ml-1 hidden sm:inline">Private</span>
+            </button>
+            <button
+              id="openJoinModalBtn"
+              type="button"
+              class="rounded-lg border border-violet-400/40 bg-violet-500/20 px-2 py-2 text-xs text-violet-200 transition hover:scale-[1.02]"
+            >
+              <i class="fa-solid fa-link"></i>
+              <span class="ml-1 hidden sm:inline">Join</span>
+            </button>
+          </div>
+
+          <ul id="sessionsList" class="space-y-2"></ul>
+        </aside>
+
+        <section class="glass-panel flex min-w-0 flex-1 flex-col rounded-2xl">
+          <header class="flex items-center justify-between border-b border-white/10 px-3 py-3 md:px-5">
+            <div class="flex items-center gap-3">
+              <button id="menuToggleBtn" class="rounded-lg border border-white/20 px-2 py-1 lg:hidden" type="button" aria-label="Open menu">
+                <i class="fa-solid fa-bars"></i>
+              </button>
+              <div>
+                <h1 id="sessionTitle" class="font-mono-ui text-base font-semibold">ALL-LE-MÔTT</h1>
+                <p id="participantsInfo" class="text-xs text-slate-400">0 participants</p>
+              </div>
+            </div>
+            <button
+              id="leaveSessionBtn"
+              type="button"
+              class="rounded-lg border border-rose-400/40 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-200 transition hover:scale-[1.02]"
+            >
+              <i class="fa-solid fa-door-open"></i>
+              <span class="ml-1 hidden sm:inline">Leave</span>
+            </button>
+          </header>
+
+          <main id="messagesContainer" class="flex-1 space-y-2 overflow-y-auto px-3 py-4 md:px-5"></main>
+
+          <form id="messageForm" class="border-t border-white/10 px-3 py-3 md:px-5">
+            <div class="flex items-end gap-2">
+              <textarea
+                id="messageInput"
+                rows="2"
+                maxlength="2000"
+                placeholder="Type a secure message..."
+                class="min-h-[44px] w-full resize-none rounded-xl border border-white/15 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-blue-400/70"
+              ></textarea>
+              <button
+                id="sendMessageBtn"
+                type="submit"
+                class="rounded-xl border border-blue-400/50 bg-blue-500/30 px-3 py-2 text-sm text-blue-100 transition hover:scale-[1.03]"
+                aria-label="Send message"
+              >
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </div>
+
+    <div id="createSessionModal" class="modal-backdrop fixed inset-0 z-[90] hidden items-center justify-center p-4">
+      <div class="modal-panel glass-panel w-full max-w-md rounded-2xl p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Fendre le bois en soussoi</h3>
+          <button id="closeCreateModalBtn" type="button" class="text-slate-400" aria-label="Close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <form id="createSessionForm" class="space-y-4">
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Duration (minutes 5-1440)</span>
+            <input
+              id="sessionDurationInput"
+              type="number"
+              min="5"
+              max="1440"
+              value="30"
+              class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-sm outline-none focus:border-blue-400/70"
+              required
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Max participants (2-50)</span>
+            <input
+              id="sessionParticipantsInput"
+              type="number"
+              min="2"
+              max="50"
+              value="10"
+              class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-sm outline-none focus:border-blue-400/70"
+              required
+            />
+          </label>
+          <button
+            type="submit"
+            class="w-full rounded-lg border border-emerald-400/50 bg-emerald-500/25 px-3 py-2 text-sm text-emerald-100 transition hover:scale-[1.01]"
+          >
+            Create Session
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div id="joinSessionModal" class="modal-backdrop fixed inset-0 z-[90] hidden items-center justify-center p-4">
+      <div class="modal-panel glass-panel w-full max-w-md rounded-2xl p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Join Private Session</h3>
+          <button id="closeJoinModalBtn" type="button" class="text-slate-400" aria-label="Close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <form id="joinSessionForm" class="space-y-4">
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Session ID</span>
+            <input
+              id="joinSessionIdInput"
+              type="text"
+              placeholder="private_xxxxx"
+              class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-sm outline-none focus:border-violet-400/70"
+              required
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Password (8 chars)</span>
+            <input
+              id="joinPasswordInput"
+              type="text"
+              maxlength="8"
+              class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-sm outline-none focus:border-violet-400/70"
+              required
+            />
+          </label>
+          <button
+            type="submit"
+            class="w-full rounded-lg border border-violet-400/50 bg-violet-500/25 px-3 py-2 text-sm text-violet-100 transition hover:scale-[1.01]"
+          >
+            Join Session
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div id="deleteModal" class="modal-backdrop fixed inset-0 z-[95] hidden items-center justify-center p-4">
+      <div class="modal-panel glass-panel w-full max-w-sm rounded-2xl p-5">
+        <h3 class="mb-2 text-lg font-semibold">Delete Message</h3>
+        <p class="mb-4 text-sm text-slate-300">This action is permanent. Confirm deletion?</p>
+        <div class="flex justify-end gap-2">
+          <button id="cancelDeleteBtn" type="button" class="rounded-lg border border-white/20 px-3 py-1.5 text-sm text-slate-200">
+            Cancel
+          </button>
+          <button id="confirmDeleteBtn" type="button" class="rounded-lg border border-rose-400/50 bg-rose-500/25 px-3 py-1.5 text-sm text-rose-100">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="sessionShareModal" class="modal-backdrop fixed inset-0 z-[96] hidden items-center justify-center p-4">
+      <div class="modal-panel glass-panel w-full max-w-lg rounded-2xl p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Private Session Created</h3>
+          <button id="closeShareModalBtn" type="button" class="text-slate-400" aria-label="Close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="space-y-3">
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Session ID</span>
+            <div class="flex gap-2">
+              <input
+                id="shareSessionIdInput"
+                type="text"
+                readonly
+                data-allow-copy="true"
+                class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-xs font-mono-ui text-slate-100 outline-none"
+              />
+              <button
+                id="copySessionIdBtn"
+                type="button"
+                class="rounded-lg border border-blue-400/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100"
+              >
+                Copy
+              </button>
+            </div>
+          </label>
+
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Password</span>
+            <div class="flex gap-2">
+              <input
+                id="sharePasswordInput"
+                type="text"
+                readonly
+                data-allow-copy="true"
+                class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-xs font-mono-ui text-slate-100 outline-none"
+              />
+              <button
+                id="copyPasswordBtn"
+                type="button"
+                class="rounded-lg border border-violet-400/40 bg-violet-500/20 px-3 py-2 text-xs text-violet-100"
+              >
+                Copy
+              </button>
+            </div>
+          </label>
+
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Invite Link</span>
+            <div class="flex gap-2">
+              <input
+                id="shareLinkInput"
+                type="text"
+                readonly
+                data-allow-copy="true"
+                class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-xs font-mono-ui text-slate-100 outline-none"
+              />
+              <button
+                id="copyLinkBtn"
+                type="button"
+                class="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs text-emerald-100"
+              >
+                Copy
+              </button>
+            </div>
+          </label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button id="shareInviteBtn" type="button" class="rounded-lg border border-cyan-400/40 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-100">
+            Share
+          </button>
+          <button id="doneShareBtn" type="button" class="rounded-lg border border-white/25 px-3 py-1.5 text-xs text-slate-100">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toastContainer" class="fixed right-3 top-3 z-[130] flex w-[min(90vw,360px)] flex-col gap-2"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/security.js"></script>
+    <script src="/js/sessions.js"></script>
+    <script src="/js/socket.js"></script>
+    <script src="/js/app.js"></script>
+  </body>
+</html>
