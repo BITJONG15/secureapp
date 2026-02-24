@@ -1,4 +1,4 @@
-﻿# SecureChat
+# SecureChat
 
 Real-time secure chat web app with public and private sessions.
 
@@ -49,7 +49,7 @@ FIREBASE_WEB_APP_ID=
 
 1. Create a Firebase project and enable Firestore.
 2. Create a service account key (`Project Settings > Service accounts`).
-3. Set these values in [.env](E:/app-chat/securechat/.env):
+3. Set these values in `.env`:
 - `FIREBASE_ENABLED=true`
 - one credential option:
 - `FIREBASE_SERVICE_ACCOUNT_JSON` (full JSON string), or
@@ -65,12 +65,3 @@ When enabled, SecureChat persists messages in Firestore and reloads recent histo
 - Real-time messaging with edit window (10 minutes)
 - Message deletion and capped message history (100/session)
 - Frontend security controls and responsive UI
-
-## Optional Extension Hooks
-
-Codebase includes commented hooks for:
-- Firebase persistence
-- End-to-end encryption
-- File sharing
-- WebRTC video
-- Push notifications
