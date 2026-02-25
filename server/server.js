@@ -14,7 +14,6 @@ const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 const NODE_ENV = process.env.NODE_ENV || "development";
 const CORS_ORIGINS = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || "";
 const SESSION_LINK_BASE_URL = process.env.SESSION_LINK_BASE_URL || process.env.FRONTEND_URL || "";
-const SOCKET_PUBLIC_URL = process.env.SOCKET_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "";
 
 function normalizeOrigin(value) {
   return String(value || "")
@@ -137,7 +136,6 @@ const io = new Server(server, {
 
 initializeSocket(io, {
   sessionLinkBase: SESSION_LINK_BASE_URL,
-  sessionSocketUrl: SOCKET_PUBLIC_URL,
 });
 
 server.listen(PORT, "0.0.0.0", () => {

@@ -1,7 +1,4 @@
-﻿(() => {
-  const STORAGE_SOCKET_URL_KEY = "securechat_socket_url";
-  const QUERY_SOCKET_URL_KEY = "socketUrl";
-
+(() => {
   let socket = null;
   let activeSocketUrl = "";
 
@@ -36,42 +33,7 @@
     return raw.replace(/\/+$/, "");
   }
 
-  function safeReadStorage(key) {
-    try {
-      return window.localStorage.getItem(key);
-    } catch (_error) {
-      return "";
-    }
-  }
-
-  function safeWriteStorage(key, value) {
-    try {
-      if (!value) {
-        window.localStorage.removeItem(key);
-        return;
-      }
-
-      window.localStorage.setItem(key, value);
-    } catch (_error) {
-      // Ignore storage failure.
-    }
-  }
-
   function resolveSocketUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const fromQuery = normalizeSocketUrl(params.get(QUERY_SOCKET_URL_KEY));
-
-    if (fromQuery) {
-      safeWriteStorage(STORAGE_SOCKET_URL_KEY, fromQuery);
-      return fromQuery;
-    }
-
-    const fromStorage = normalizeSocketUrl(safeReadStorage(STORAGE_SOCKET_URL_KEY));
-
-    if (fromStorage) {
-      return fromStorage;
-    }
-
     const fromWindowConfig =
       window.SECURECHAT_CONFIG && window.SECURECHAT_CONFIG.SOCKET_URL
         ? normalizeSocketUrl(window.SECURECHAT_CONFIG.SOCKET_URL)
@@ -81,30 +43,7 @@
       return fromWindowConfig;
     }
 
-    // On Netlify the frontend is static; there is no local Socket.IO runtime.
-    if (window.location.hostname.endsWith(".netlify.app")) {
-      return "";
-    }
-
     return normalizeSocketUrl(window.location.origin);
-  }
-
-  function emitSyntheticConnectError(message) {
-    const handlers = eventHandlers.get("connect_error");
-
-    if (!handlers || handlers.size === 0) {
-      return;
-    }
-
-    const error = new Error(message);
-
-    handlers.forEach((handler) => {
-      try {
-        handler(error);
-      } catch (_error) {
-        // Ignore handler errors.
-      }
-    });
   }
 
   function addHandler(store, eventName, handler, binder) {
@@ -150,17 +89,12 @@
 
     activeSocketUrl = resolveSocketUrl();
 
-    if (!activeSocketUrl) {
-      emitSyntheticConnectError("SOCKET_URL_REQUIRED: configure ?socketUrl=https://your-backend.example.com");
-      return null;
-    }
-
     socket = io(activeSocketUrl, {
       path: "/socket.io",
       auth: {
         userId,
       },
-      transports: ["polling", "websocket"],
+      transports: ["websocket", "polling"],
       upgrade: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -191,14 +125,14 @@
     socket = null;
   }
 
-  function setSocketUrl(url, persist = true) {
+  function setSocketUrl(url) {
     const normalized = normalizeSocketUrl(url);
 
-    activeSocketUrl = normalized;
-
-    if (persist) {
-      safeWriteStorage(STORAGE_SOCKET_URL_KEY, normalized);
+    if (!normalized) {
+      return;
     }
+
+    activeSocketUrl = normalized;
 
     if (socket) {
       socket.disconnect();

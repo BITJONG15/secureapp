@@ -76,16 +76,11 @@ function isWithinEditWindow(timestamp, windowMinutes = 10) {
   return Date.now() - ts <= windowMinutes * 60 * 1000;
 }
 
-function buildSessionLink(sessionId, origin = "", socketUrl = "") {
+function buildSessionLink(sessionId, origin = "") {
   const normalizedOrigin = origin ? origin.replace(/\/+$/, "") : "";
-  const normalizedSocketUrl = socketUrl ? socketUrl.replace(/\/+$/, "") : "";
   const params = new URLSearchParams();
 
   params.set("session", sessionId);
-
-  if (normalizedSocketUrl) {
-    params.set("socketUrl", normalizedSocketUrl);
-  }
 
   const query = params.toString();
 

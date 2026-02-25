@@ -1,17 +1,16 @@
 services:
   - type: web
-    name: securechat-backend
+    name: securechat
     env: node
     plan: free
     buildCommand: npm ci
     startCommand: npm start
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: CORS_ORIGINS
-        value: https://699e4acda23b87d9235fd0d7--gosth.netlify.app
+        value: "*"
       - key: SESSION_LINK_BASE_URL
-        value: https://699e4acda23b87d9235fd0d7--gosth.netlify.app
-      - key: SOCKET_PUBLIC_URL
-        value: https://secureapp-0vkd.onrender.com
+        value: https://your-service-name.onrender.com
