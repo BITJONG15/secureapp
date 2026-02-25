@@ -1,4 +1,4 @@
-﻿const http = require("http");
+const http = require("http");
 const path = require("path");
 
 const cors = require("cors");
@@ -12,13 +12,81 @@ dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 const NODE_ENV = process.env.NODE_ENV || "development";
+const CORS_ORIGINS = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || "";
+const SESSION_LINK_BASE_URL = process.env.SESSION_LINK_BASE_URL || process.env.FRONTEND_URL || "";
+const SOCKET_PUBLIC_URL = process.env.SOCKET_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "";
+
+function normalizeOrigin(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+function parseAllowedOrigins(value) {
+  if (!value) {
+    return [];
+  }
+
+  return String(value)
+    .split(",")
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean);
+}
+
+function isOriginAllowed(origin, allowedOrigins) {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.length === 0 || allowedOrigins.includes("*")) {
+    return true;
+  }
+
+  return allowedOrigins.some((allowed) => {
+    if (allowed === origin) {
+      return true;
+    }
+
+    if (allowed.startsWith("*.")) {
+      try {
+        const parsed = new URL(origin);
+        const expectedSuffix = allowed.slice(1);
+        return parsed.hostname.endsWith(expectedSuffix);
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    return false;
+  });
+}
+
+function buildCorsOrigin(allowedOrigins) {
+  if (allowedOrigins.length === 0 || allowedOrigins.includes("*")) {
+    return true;
+  }
+
+  return (origin, callback) => {
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    if (isOriginAllowed(normalizedOrigin, allowedOrigins)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS origin not allowed: ${normalizedOrigin || "unknown"}`));
+  };
+}
+
+const allowedOrigins = parseAllowedOrigins(CORS_ORIGINS);
+const corsOrigin = buildCorsOrigin(allowedOrigins);
 
 const app = express();
 app.disable("x-powered-by");
 
 app.use(
   cors({
-    origin: true,
+    origin: corsOrigin,
     credentials: false,
   })
 );
@@ -58,7 +126,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: corsOrigin,
     methods: ["GET", "POST"],
   },
   transports: ["websocket", "polling"],
@@ -67,9 +135,14 @@ const io = new Server(server, {
   },
 });
 
-initializeSocket(io);
+initializeSocket(io, {
+  sessionLinkBase: SESSION_LINK_BASE_URL,
+  sessionSocketUrl: SOCKET_PUBLIC_URL,
+});
 
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
   // eslint-disable-next-line no-console
   console.log(`SecureChat server listening on http://localhost:${PORT} (${NODE_ENV})`);
+  // eslint-disable-next-line no-console
+  console.log(`SecureChat CORS origins: ${allowedOrigins.length > 0 ? allowedOrigins.join(", ") : "*"}`);
 });

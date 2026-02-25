@@ -17,12 +17,13 @@ function createError(message, code) {
 }
 
 class SessionManager {
-  constructor({ onSessionExpired, sessionLinkBase } = {}) {
+  constructor({ onSessionExpired, sessionLinkBase, sessionSocketUrl } = {}) {
     this.sessions = new Map();
     this.expiryTimers = new Map();
     this.emptyTimers = new Map();
     this.onSessionExpired = typeof onSessionExpired === "function" ? onSessionExpired : () => {};
     this.sessionLinkBase = sessionLinkBase || "";
+    this.sessionSocketUrl = sessionSocketUrl || "";
 
     this._initGeneralSession();
 
@@ -47,7 +48,7 @@ class SessionManager {
       password: null,
       createdAt: nowIso,
       expiresAt: null,
-      link: buildSessionLink(GENERAL_SESSION_ID, this.sessionLinkBase),
+      link: buildSessionLink(GENERAL_SESSION_ID, this.sessionLinkBase, this.sessionSocketUrl),
       participants: new Map(),
     });
   }
@@ -143,7 +144,7 @@ class SessionManager {
       password,
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + duration * 60 * 1000).toISOString(),
-      link: buildSessionLink(sessionId, this.sessionLinkBase),
+      link: buildSessionLink(sessionId, this.sessionLinkBase, this.sessionSocketUrl),
       participants: new Map(),
     };
 

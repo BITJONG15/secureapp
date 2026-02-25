@@ -81,7 +81,30 @@
       return fromWindowConfig;
     }
 
+    // On Netlify the frontend is static; there is no local Socket.IO runtime.
+    if (window.location.hostname.endsWith(".netlify.app")) {
+      return "";
+    }
+
     return normalizeSocketUrl(window.location.origin);
+  }
+
+  function emitSyntheticConnectError(message) {
+    const handlers = eventHandlers.get("connect_error");
+
+    if (!handlers || handlers.size === 0) {
+      return;
+    }
+
+    const error = new Error(message);
+
+    handlers.forEach((handler) => {
+      try {
+        handler(error);
+      } catch (_error) {
+        // Ignore handler errors.
+      }
+    });
   }
 
   function addHandler(store, eventName, handler, binder) {
@@ -127,12 +150,18 @@
 
     activeSocketUrl = resolveSocketUrl();
 
+    if (!activeSocketUrl) {
+      emitSyntheticConnectError("SOCKET_URL_REQUIRED: configure ?socketUrl=https://your-backend.example.com");
+      return null;
+    }
+
     socket = io(activeSocketUrl, {
       path: "/socket.io",
       auth: {
         userId,
       },
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
+      upgrade: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 600,

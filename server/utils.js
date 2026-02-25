@@ -76,9 +76,20 @@ function isWithinEditWindow(timestamp, windowMinutes = 10) {
   return Date.now() - ts <= windowMinutes * 60 * 1000;
 }
 
-function buildSessionLink(sessionId, origin = "") {
+function buildSessionLink(sessionId, origin = "", socketUrl = "") {
   const normalizedOrigin = origin ? origin.replace(/\/+$/, "") : "";
-  return normalizedOrigin ? `${normalizedOrigin}/?session=${sessionId}` : `/?session=${sessionId}`;
+  const normalizedSocketUrl = socketUrl ? socketUrl.replace(/\/+$/, "") : "";
+  const params = new URLSearchParams();
+
+  params.set("session", sessionId);
+
+  if (normalizedSocketUrl) {
+    params.set("socketUrl", normalizedSocketUrl);
+  }
+
+  const query = params.toString();
+
+  return normalizedOrigin ? `${normalizedOrigin}/?${query}` : `/?${query}`;
 }
 
 function normalizeUserId(input) {

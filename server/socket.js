@@ -28,7 +28,7 @@ function normalizeMessageId(value) {
   return cleaned ? cleaned.replace(/[^a-zA-Z0-9-]/g, "") : "";
 }
 
-function initializeSocket(io, { sessionLinkBase = "" } = {}) {
+function initializeSocket(io, { sessionLinkBase = "", sessionSocketUrl = "" } = {}) {
   const messageManager = new MessageManager();
   const firebaseStatus = getFirebaseStatus();
 
@@ -63,6 +63,7 @@ function initializeSocket(io, { sessionLinkBase = "" } = {}) {
   };
 
   const sessionManager = new SessionManager({
+    sessionSocketUrl,
     sessionLinkBase,
     onSessionExpired: ({ sessionId, reason, participants }) => {
       io.to(sessionId).emit("session-expired", { sessionId, reason });

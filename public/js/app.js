@@ -5,6 +5,7 @@
   const state = {
     currentSessionId: "general",
     isConnected: false,
+    hasRequestedSocketUrl: false,
     previousUserId: "",
     privateSessionPasswords: new Map(),
     requestTimeoutId: null,
@@ -251,12 +252,34 @@
     window.SecureChatSocket.on("connect_error", (error) => {
       state.isConnected = false;
       finishRequest();
-      const detail = error && error.message ? ` (${error.message})` : "";
+      const message = error && error.message ? String(error.message) : "";
+      const detail = message ? ` (${message})` : "";
       window.SecureChatUI.showToast(
         `Connexion Socket impossible vers ${window.SecureChatSocket.getSocketUrl()}${detail}`,
         "error",
         7000
       );
+
+      if (message.includes("SOCKET_URL_REQUIRED") && !state.hasRequestedSocketUrl) {
+        state.hasRequestedSocketUrl = true;
+
+        const providedUrl = window.prompt(
+          "URL du backend Socket.IO requise (ex: https://ton-backend.example.com)",
+          ""
+        );
+
+        if (providedUrl && providedUrl.trim()) {
+          window.SecureChatSocket.setSocketUrl(providedUrl.trim(), true);
+          window.SecureChatSocket.connect(state.userId);
+          return;
+        }
+
+        window.SecureChatUI.showToast(
+          "Ajoute ?socketUrl=https://ton-backend.example.com dans l'URL de ton site Netlify.",
+          "warning",
+          9000
+        );
+      }
     });
 
     window.SecureChatSocket.onManager("reconnect", () => {
