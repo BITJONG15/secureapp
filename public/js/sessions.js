@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const state = {
     sessions: [],
     currentSessionId: "general",
@@ -10,6 +10,7 @@
     joinSession: null,
     leaveSession: null,
     requestSessions: null,
+    updateSessionDuration: null,
     notify: null,
   };
 
@@ -87,13 +88,14 @@
 
       const sessionId = normalizeSessionId(target.dataset.sessionId);
       const sessionType = target.dataset.sessionType;
+      const joinMode = target.dataset.sessionJoinMode;
 
       if (!sessionId) {
         return;
       }
 
-      if (sessionType === "private") {
-        window.SecureChatUI.prefillJoinSession(sessionId);
+      if (sessionType === "private" && joinMode === "password" && sessionId !== state.currentSessionId) {
+        window.SecureChatUI.prefillJoinSession(sessionId, "", "");
         window.SecureChatUI.openModal(document.getElementById("joinSessionModal"));
         return;
       }
@@ -181,9 +183,11 @@
 
       const sessionIdInput = document.getElementById("joinSessionIdInput");
       const passwordInput = document.getElementById("joinPasswordInput");
+      const e2eeInput = document.getElementById("joinE2eeKeyInput");
 
       const sessionId = normalizeSessionId(sessionIdInput.value);
       const password = String(passwordInput.value || "").trim();
+      const keyMaterial = String((e2eeInput && e2eeInput.value) || "").trim();
 
       if (!sessionId) {
         callbacks.notify("Session ID is required.", "error");
@@ -196,7 +200,11 @@
       }
 
       if (typeof callbacks.joinPrivateSession === "function") {
-        callbacks.joinPrivateSession({ sessionId, password });
+        callbacks.joinPrivateSession({
+          sessionId,
+          password,
+          keyMaterial,
+        });
       }
     });
   }
@@ -265,16 +273,38 @@
     });
   }
 
-  function handleAutoJoinFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const sessionParam = normalizeSessionId(params.get("session"));
+  function bindSessionDurationUpdate() {
+    const form = document.getElementById("updateDurationForm");
 
-    if (!sessionParam || sessionParam === "general") {
+    if (!form) {
       return;
     }
 
-    window.SecureChatUI.prefillJoinSession(sessionParam);
-    window.SecureChatUI.openModal(document.getElementById("joinSessionModal"));
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      if (typeof callbacks.updateSessionDuration !== "function") {
+        return;
+      }
+
+      if (state.currentSessionId === "general") {
+        callbacks.notify("General session duration cannot be updated.", "warning");
+        return;
+      }
+
+      const input = document.getElementById("updateDurationInput");
+      const durationMinutes = Number.parseInt((input && input.value) || "", 10);
+
+      if (!Number.isInteger(durationMinutes) || durationMinutes < 5 || durationMinutes > 1440) {
+        callbacks.notify("Duration must be between 5 and 1440 minutes.", "error");
+        return;
+      }
+
+      callbacks.updateSessionDuration({
+        sessionId: state.currentSessionId,
+        durationMinutes,
+      });
+    });
   }
 
   function init(config = {}) {
@@ -283,6 +313,7 @@
     callbacks.joinSession = config.onJoinSession;
     callbacks.leaveSession = config.onLeaveSession;
     callbacks.requestSessions = config.onRequestSessions;
+    callbacks.updateSessionDuration = config.onUpdateSessionDuration;
     callbacks.notify = typeof config.notify === "function" ? config.notify : () => {};
 
     bindSessionListClicks();
@@ -290,12 +321,11 @@
     bindJoinSessionForm();
     bindSidebarControls();
     bindLeaveButton();
+    bindSessionDurationUpdate();
 
     if (typeof callbacks.requestSessions === "function") {
       callbacks.requestSessions();
     }
-
-    handleAutoJoinFromUrl();
   }
 
   window.SecureChatSessions = {

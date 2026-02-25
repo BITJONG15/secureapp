@@ -82,7 +82,7 @@
     }
   }
 
-  function connect(userId) {
+  function connect(auth = {}) {
     if (socket) {
       return socket;
     }
@@ -92,7 +92,8 @@
     socket = io(activeSocketUrl, {
       path: "/socket.io",
       auth: {
-        userId,
+        userId: auth.userId || "",
+        password: auth.password || "",
       },
       transports: ["websocket", "polling"],
       upgrade: true,

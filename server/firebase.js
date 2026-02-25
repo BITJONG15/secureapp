@@ -123,6 +123,8 @@ async function saveMessage(message) {
     .doc(message.id)
     .set({
       ...message,
+      encrypted: Boolean(message.encrypted),
+      iv: message.iv || "",
       createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
     });
 }
@@ -135,6 +137,8 @@ async function editMessage(message) {
   await messagesCollection(message.sessionId).doc(message.id).update({
     content: message.content,
     edited: true,
+    encrypted: Boolean(message.encrypted),
+    iv: message.iv || "",
     updatedAt: new Date().toISOString(),
   });
 }
@@ -198,6 +202,8 @@ async function loadRecentMessages(sessionId, limit = 100) {
       content: data.content || "",
       timestamp: data.timestamp || new Date().toISOString(),
       edited: Boolean(data.edited),
+      encrypted: Boolean(data.encrypted),
+      iv: data.iv || "",
     };
   });
 }
@@ -213,11 +219,23 @@ async function clearSessionMessages(sessionId) {
     return;
   }
 
-  const batch = firestore.batch();
-  snapshot.docs.forEach((doc) => {
-    batch.delete(doc.ref);
-  });
-  await batch.commit();
+  let currentBatch = firestore.batch();
+  let operationsInBatch = 0;
+
+  for (const doc of snapshot.docs) {
+    currentBatch.delete(doc.ref);
+    operationsInBatch += 1;
+
+    if (operationsInBatch >= 400) {
+      await currentBatch.commit();
+      currentBatch = firestore.batch();
+      operationsInBatch = 0;
+    }
+  }
+
+  if (operationsInBatch > 0) {
+    await currentBatch.commit();
+  }
 }
 
 module.exports = {

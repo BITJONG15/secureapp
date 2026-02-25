@@ -1,4 +1,4 @@
-﻿const { randomInt } = require("crypto");
+const { randomInt } = require("crypto");
 
 const ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -22,6 +22,10 @@ function generatePrivateSessionId() {
 
 function generatePassword() {
   return randomString(8);
+}
+
+function generateIdentityPassword() {
+  return randomString(12);
 }
 
 function sanitizeText(value, maxLength = 2000) {
@@ -94,6 +98,7 @@ function normalizeUserId(input) {
 
 module.exports = {
   buildSessionLink,
+  generateIdentityPassword,
   generatePassword,
   generatePrivateSessionId,
   generateUserId,

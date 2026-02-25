@@ -130,6 +130,16 @@ textarea {
   color: var(--text-muted);
 }
 
+.sender-chip {
+  color: #93C5FD;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.sender-chip:hover {
+  color: #BFDBFE;
+}
+
 .system-message {
   text-align: center;
   color: var(--text-muted);
@@ -200,6 +210,14 @@ textarea {
 .privacy-shield {
   filter: blur(8px);
   pointer-events: none;
+}
+
+.participant-item button {
+  transition: transform 0.15s ease;
+}
+
+.participant-item button:hover {
+  transform: translateY(-1px);
 }
 
 @media (max-width: 1023px) {

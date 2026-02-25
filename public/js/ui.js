@@ -1,10 +1,13 @@
-﻿(() => {
+(() => {
   const MAX_SENDER_CHARS = 8;
 
   const refs = {};
 
   const state = {
     messageActionHandler: null,
+    userIdClickHandler: null,
+    participantKickHandler: null,
+    panicResetHandler: null,
     deleteConfirmResolver: null,
     sessionShareData: null,
   };
@@ -14,29 +17,43 @@
     refs.bootStatus = document.getElementById("bootStatus");
     refs.bootProgress = document.getElementById("bootProgress");
     refs.bootTimer = document.getElementById("bootTimer");
+
     refs.userIdDisplay = document.getElementById("userIdDisplay");
+    refs.userPasswordDisplay = document.getElementById("userPasswordDisplay");
+    refs.copyIdentityBtn = document.getElementById("copyIdentityBtn");
+    refs.panicResetBtn = document.getElementById("panicResetBtn");
+
     refs.sessionTitle = document.getElementById("sessionTitle");
     refs.participantsInfo = document.getElementById("participantsInfo");
+    refs.encryptionBadge = document.getElementById("encryptionBadge");
     refs.sessionsList = document.getElementById("sessionsList");
     refs.messagesContainer = document.getElementById("messagesContainer");
     refs.toastContainer = document.getElementById("toastContainer");
     refs.globalLoader = document.getElementById("globalLoader");
     refs.sidebar = document.getElementById("sidebar");
 
+    refs.participantManager = document.getElementById("participantManager");
+    refs.participantManagerTitle = document.getElementById("participantManagerTitle");
+    refs.participantManagerList = document.getElementById("participantManagerList");
+    refs.updateDurationBlock = document.getElementById("updateDurationBlock");
+
     refs.createSessionModal = document.getElementById("createSessionModal");
     refs.joinSessionModal = document.getElementById("joinSessionModal");
     refs.deleteModal = document.getElementById("deleteModal");
     refs.confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
     refs.cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
+
     refs.sessionShareModal = document.getElementById("sessionShareModal");
     refs.closeShareModalBtn = document.getElementById("closeShareModalBtn");
     refs.doneShareBtn = document.getElementById("doneShareBtn");
     refs.shareInviteBtn = document.getElementById("shareInviteBtn");
     refs.shareSessionIdInput = document.getElementById("shareSessionIdInput");
     refs.sharePasswordInput = document.getElementById("sharePasswordInput");
+    refs.shareE2eeKeyInput = document.getElementById("shareE2eeKeyInput");
     refs.shareLinkInput = document.getElementById("shareLinkInput");
     refs.copySessionIdBtn = document.getElementById("copySessionIdBtn");
     refs.copyPasswordBtn = document.getElementById("copyPasswordBtn");
+    refs.copyE2eeBtn = document.getElementById("copyE2eeBtn");
     refs.copyLinkBtn = document.getElementById("copyLinkBtn");
   }
 
@@ -118,7 +135,7 @@
 
       setTimeout(() => {
         toast.remove();
-      }, 200);
+      }, 220);
     }, durationMs);
   }
 
@@ -136,9 +153,13 @@
     }
   }
 
-  function setUserId(userId) {
+  function setIdentity(userId, password) {
     if (refs.userIdDisplay) {
-      refs.userIdDisplay.textContent = userId;
+      refs.userIdDisplay.textContent = userId || "--";
+    }
+
+    if (refs.userPasswordDisplay) {
+      refs.userPasswordDisplay.textContent = password || "--";
     }
   }
 
@@ -153,6 +174,17 @@
     }
   }
 
+  function setEncryptionStatus(enabled, label = "") {
+    if (!refs.encryptionBadge) {
+      return;
+    }
+
+    refs.encryptionBadge.textContent = enabled ? `E2EE: ${label || "active"}` : label || "E2EE: inactive";
+    refs.encryptionBadge.className = `encryption-badge rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${
+      enabled ? "border-emerald-400/40 text-emerald-200 bg-emerald-500/20" : "border-slate-500/40 text-slate-300 bg-slate-700/30"
+    }`;
+  }
+
   function renderSessions(sessions, currentSessionId) {
     if (!refs.sessionsList) {
       return;
@@ -165,12 +197,16 @@
       button.type = "button";
       button.dataset.sessionId = session.id;
       button.dataset.sessionType = session.type;
+      button.dataset.sessionJoinMode = session.joinMode || "open";
       button.className = `session-item glass-panel w-full rounded-xl border px-3 py-2 text-left text-sm ${
         session.id === currentSessionId ? "active" : ""
       }`;
 
-      const limitLabel = session.maxParticipants ? `${session.participantCount}/${session.maxParticipants}` : `${session.participantCount}`;
-      const typeLabel = session.type === "private" ? "private" : "public";
+      const limitLabel = session.maxParticipants
+        ? `${session.participantCount}/${session.maxParticipants}`
+        : `${session.participantCount}`;
+
+      const typeLabel = session.type === "private" ? `private-${session.mode || "custom"}` : "public";
 
       button.innerHTML = `
         <div class="flex items-center justify-between gap-2">
@@ -194,7 +230,28 @@
     });
   }
 
-  function buildMessageElement(message, currentUserId) {
+  function buildSenderNode(message, isSelf, currentSessionId) {
+    const senderText = truncateSender(message.userId);
+
+    if (!isSelf && currentSessionId === "general" && state.userIdClickHandler) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sender-chip font-mono-ui";
+      button.textContent = senderText;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.userIdClickHandler(message.userId);
+      });
+      return button;
+    }
+
+    const span = document.createElement("span");
+    span.className = "font-mono-ui";
+    span.textContent = senderText;
+    return span;
+  }
+
+  function buildMessageElement(message, currentUserId, currentSessionId) {
     const isSelf = message.userId === currentUserId;
 
     const row = document.createElement("div");
@@ -210,11 +267,16 @@
 
     const meta = document.createElement("div");
     meta.className = "message-meta mt-2 flex items-center gap-2";
-    meta.innerHTML = `
-      <span class="font-mono-ui">${escapeHtml(truncateSender(message.userId))}</span>
-      <span>${escapeHtml(formatTimestamp(message.timestamp))}</span>
-      <span>${message.edited ? "(edited)" : ""}</span>
-    `;
+
+    const senderNode = buildSenderNode(message, isSelf, currentSessionId);
+    const timeNode = document.createElement("span");
+    timeNode.textContent = formatTimestamp(message.timestamp);
+    const editedNode = document.createElement("span");
+    editedNode.textContent = message.edited ? "(modifie)" : "";
+
+    meta.appendChild(senderNode);
+    meta.appendChild(timeNode);
+    meta.appendChild(editedNode);
 
     bubble.appendChild(body);
     bubble.appendChild(meta);
@@ -260,7 +322,7 @@
     return row;
   }
 
-  function renderMessages(messages, currentUserId) {
+  function renderMessages(messages, currentUserId, currentSessionId) {
     if (!refs.messagesContainer) {
       return;
     }
@@ -268,13 +330,13 @@
     refs.messagesContainer.innerHTML = "";
 
     messages.forEach((message) => {
-      refs.messagesContainer.appendChild(buildMessageElement(message, currentUserId));
+      refs.messagesContainer.appendChild(buildMessageElement(message, currentUserId, currentSessionId));
     });
 
     refs.messagesContainer.scrollTop = refs.messagesContainer.scrollHeight;
   }
 
-  function appendMessage(message, currentUserId) {
+  function appendMessage(message, currentUserId, currentSessionId) {
     if (!refs.messagesContainer) {
       return;
     }
@@ -282,14 +344,14 @@
     const nearBottom =
       refs.messagesContainer.scrollHeight - refs.messagesContainer.scrollTop - refs.messagesContainer.clientHeight < 80;
 
-    refs.messagesContainer.appendChild(buildMessageElement(message, currentUserId));
+    refs.messagesContainer.appendChild(buildMessageElement(message, currentUserId, currentSessionId));
 
     if (nearBottom) {
       refs.messagesContainer.scrollTop = refs.messagesContainer.scrollHeight;
     }
   }
 
-  function updateMessage(message, currentUserId) {
+  function updateMessage(message, currentUserId, currentSessionId) {
     if (!refs.messagesContainer) {
       return;
     }
@@ -297,11 +359,11 @@
     const current = refs.messagesContainer.querySelector(`[data-message-id="${message.id}"]`);
 
     if (!current) {
-      appendMessage(message, currentUserId);
+      appendMessage(message, currentUserId, currentSessionId);
       return;
     }
 
-    current.replaceWith(buildMessageElement(message, currentUserId));
+    current.replaceWith(buildMessageElement(message, currentUserId, currentSessionId));
   }
 
   function removeMessage(messageId) {
@@ -347,11 +409,21 @@
     }
   }
 
-  function prefillJoinSession(sessionId) {
-    const input = document.getElementById("joinSessionIdInput");
+  function prefillJoinSession(sessionId, password = "", e2eeKey = "") {
+    const idInput = document.getElementById("joinSessionIdInput");
+    const passwordInput = document.getElementById("joinPasswordInput");
+    const keyInput = document.getElementById("joinE2eeKeyInput");
 
-    if (input) {
-      input.value = sessionId || "";
+    if (idInput) {
+      idInput.value = sessionId || "";
+    }
+
+    if (passwordInput) {
+      passwordInput.value = password || "";
+    }
+
+    if (keyInput) {
+      keyInput.value = e2eeKey || "";
     }
   }
 
@@ -400,6 +472,68 @@
     return copied;
   }
 
+  function renderParticipantManager({ session, currentUserId, participants }) {
+    if (!refs.participantManager || !refs.participantManagerList || !refs.participantManagerTitle) {
+      return;
+    }
+
+    const isPrivateSession = Boolean(session && session.type === "private");
+
+    if (!isPrivateSession) {
+      refs.participantManager.classList.add("hidden");
+      refs.participantManagerList.innerHTML = "";
+      return;
+    }
+
+    refs.participantManager.classList.remove("hidden");
+
+    const isCreator = session.creatorUserId && session.creatorUserId === currentUserId;
+
+    refs.participantManagerTitle.textContent = isCreator
+      ? "Gestion participants (createur)"
+      : `Participants (${session.mode || "private"})`;
+
+    refs.participantManagerList.innerHTML = "";
+
+    const items = Array.isArray(participants) ? participants : [];
+
+    items.forEach((participantUserId) => {
+      const item = document.createElement("li");
+      item.className = "participant-item flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/35 px-2 py-1.5";
+
+      const name = document.createElement("span");
+      name.className = "text-xs text-slate-200 font-mono-ui";
+      name.textContent = participantUserId;
+      item.appendChild(name);
+
+      if (isCreator && participantUserId !== currentUserId) {
+        const kickButton = document.createElement("button");
+        kickButton.type = "button";
+        kickButton.className = "rounded border border-rose-400/40 bg-rose-500/20 px-2 py-1 text-[11px] text-rose-100";
+        kickButton.textContent = "Ejecter";
+        kickButton.addEventListener("click", () => {
+          if (state.participantKickHandler) {
+            state.participantKickHandler({
+              sessionId: session.id,
+              targetUserId: participantUserId,
+            });
+          }
+        });
+        item.appendChild(kickButton);
+      }
+
+      refs.participantManagerList.appendChild(item);
+    });
+
+    if (refs.updateDurationBlock) {
+      if (isCreator && session.mode === "custom") {
+        refs.updateDurationBlock.classList.remove("hidden");
+      } else {
+        refs.updateDurationBlock.classList.add("hidden");
+      }
+    }
+  }
+
   function setupDeleteModalBindings() {
     if (refs.confirmDeleteBtn) {
       refs.confirmDeleteBtn.addEventListener("click", () => {
@@ -424,6 +558,26 @@
     }
   }
 
+  function setupIdentityBindings() {
+    if (refs.copyIdentityBtn) {
+      refs.copyIdentityBtn.addEventListener("click", async () => {
+        const payload = `ID: ${refs.userIdDisplay ? refs.userIdDisplay.textContent : ""}\nPassword: ${
+          refs.userPasswordDisplay ? refs.userPasswordDisplay.textContent : ""
+        }`;
+        const copied = await copyToClipboard(payload);
+        showToast(copied ? "Identifiants copies." : "Impossible de copier les identifiants.", copied ? "success" : "error");
+      });
+    }
+
+    if (refs.panicResetBtn) {
+      refs.panicResetBtn.addEventListener("click", () => {
+        if (state.panicResetHandler) {
+          state.panicResetHandler();
+        }
+      });
+    }
+  }
+
   function setupShareModalBindings() {
     const closeShare = () => {
       closeModal(refs.sessionShareModal);
@@ -440,21 +594,28 @@
     if (refs.copySessionIdBtn) {
       refs.copySessionIdBtn.addEventListener("click", async () => {
         const copied = await copyToClipboard(refs.shareSessionIdInput && refs.shareSessionIdInput.value);
-        showToast(copied ? "Session ID copied." : "Unable to copy Session ID.", copied ? "success" : "error");
+        showToast(copied ? "Session ID copie." : "Impossible de copier Session ID.", copied ? "success" : "error");
       });
     }
 
     if (refs.copyPasswordBtn) {
       refs.copyPasswordBtn.addEventListener("click", async () => {
         const copied = await copyToClipboard(refs.sharePasswordInput && refs.sharePasswordInput.value);
-        showToast(copied ? "Password copied." : "Unable to copy password.", copied ? "success" : "error");
+        showToast(copied ? "Mot de passe copie." : "Impossible de copier le mot de passe.", copied ? "success" : "error");
+      });
+    }
+
+    if (refs.copyE2eeBtn) {
+      refs.copyE2eeBtn.addEventListener("click", async () => {
+        const copied = await copyToClipboard(refs.shareE2eeKeyInput && refs.shareE2eeKeyInput.value);
+        showToast(copied ? "Cle E2EE copiee." : "Impossible de copier la cle E2EE.", copied ? "success" : "error");
       });
     }
 
     if (refs.copyLinkBtn) {
       refs.copyLinkBtn.addEventListener("click", async () => {
         const copied = await copyToClipboard(refs.shareLinkInput && refs.shareLinkInput.value);
-        showToast(copied ? "Invite link copied." : "Unable to copy invite link.", copied ? "success" : "error");
+        showToast(copied ? "Lien copie." : "Impossible de copier le lien.", copied ? "success" : "error");
       });
     }
 
@@ -463,11 +624,11 @@
         const payload = state.sessionShareData;
 
         if (!payload) {
-          showToast("No session data to share.", "error");
+          showToast("Aucune session a partager.", "error");
           return;
         }
 
-        const shareText = `SecureChat private session\nID: ${payload.sessionId}\nPassword: ${payload.password}\nLink: ${payload.link}`;
+        const shareText = `SecureChat invite\nID: ${payload.sessionId}\nPassword: ${payload.password}\nE2EE key: ${payload.e2eeKey}\nLink: ${payload.link}`;
 
         if (navigator.share) {
           try {
@@ -476,7 +637,7 @@
               text: shareText,
               url: payload.link,
             });
-            showToast("Invite shared.", "success");
+            showToast("Invitation partagee.", "success");
             return;
           } catch (_error) {
             // Fallback to clipboard.
@@ -484,7 +645,7 @@
         }
 
         const copied = await copyToClipboard(shareText);
-        showToast(copied ? "Invite details copied." : "Unable to share invite.", copied ? "success" : "error");
+        showToast(copied ? "Invitation copiee." : "Impossible de partager l'invitation.", copied ? "success" : "error");
       });
     }
   }
@@ -543,6 +704,7 @@
     const shareData = {
       sessionId: data.sessionId || "",
       password: data.password || "",
+      e2eeKey: data.e2eeKey || "",
       link: data.link || "",
     };
 
@@ -554,6 +716,10 @@
 
     if (refs.sharePasswordInput) {
       refs.sharePasswordInput.value = shareData.password;
+    }
+
+    if (refs.shareE2eeKeyInput) {
+      refs.shareE2eeKeyInput.value = shareData.e2eeKey;
     }
 
     if (refs.shareLinkInput) {
@@ -588,6 +754,7 @@
   function init() {
     cacheRefs();
     setupDeleteModalBindings();
+    setupIdentityBindings();
     setupShareModalBindings();
     setupModalDismissBindings();
 
@@ -609,14 +776,25 @@
     prefillJoinSession,
     removeMessage,
     renderMessages,
+    renderParticipantManager,
     renderSessions,
+    setEncryptionStatus,
+    setIdentity,
     setLoading,
     setMessageActionHandler: (handler) => {
       state.messageActionHandler = handler;
     },
+    setPanicResetHandler: (handler) => {
+      state.panicResetHandler = handler;
+    },
+    setParticipantKickHandler: (handler) => {
+      state.participantKickHandler = handler;
+    },
     setSessionHeader,
     setSidebarOpen,
-    setUserId,
+    setUserIdClickHandler: (handler) => {
+      state.userIdClickHandler = handler;
+    },
     showSessionShare,
     showToast,
     updateBoot,

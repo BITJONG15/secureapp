@@ -1,13 +1,49 @@
-﻿const { v4: uuidv4 } = require("uuid");
+const { v4: uuidv4 } = require("uuid");
 const { isWithinEditWindow, sanitizeText } = require("./utils");
 
 const MAX_MESSAGES_PER_SESSION = 100;
 const EDIT_WINDOW_MINUTES = 10;
+const MAX_ENCRYPTED_MESSAGE_LENGTH = 12000;
+const MAX_IV_LENGTH = 256;
 
 function createError(message, code) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function normalizePlainContent(content) {
+  const cleanContent = sanitizeText(content, 2000);
+
+  if (!cleanContent) {
+    throw createError("Message content cannot be empty.", "EMPTY_MESSAGE");
+  }
+
+  return cleanContent;
+}
+
+function normalizeEncryptedContent(content) {
+  if (typeof content !== "string") {
+    throw createError("Invalid encrypted payload.", "INVALID_ENCRYPTED_PAYLOAD");
+  }
+
+  const compact = content.trim();
+
+  if (!compact || compact.length > MAX_ENCRYPTED_MESSAGE_LENGTH) {
+    throw createError("Invalid encrypted payload.", "INVALID_ENCRYPTED_PAYLOAD");
+  }
+
+  return compact;
+}
+
+function normalizeIv(iv) {
+  const compact = String(iv || "").trim();
+
+  if (!compact || compact.length > MAX_IV_LENGTH) {
+    throw createError("Invalid IV for encrypted message.", "INVALID_ENCRYPTED_PAYLOAD");
+  }
+
+  return compact;
 }
 
 class MessageManager {
@@ -38,41 +74,43 @@ class MessageManager {
       ? messages
           .filter((message) => message && message.id && message.userId && message.sessionId === sessionId)
           .slice(-this.maxMessages)
-          .map((message) => ({
-            id: message.id,
-            userId: message.userId,
-            sessionId: message.sessionId,
-            content: sanitizeText(message.content, 2000),
-            timestamp: message.timestamp,
-            edited: Boolean(message.edited),
-          }))
+          .map((message) => {
+            const encrypted = Boolean(message.encrypted);
+
+            return {
+              id: message.id,
+              userId: message.userId,
+              sessionId: message.sessionId,
+              content: encrypted ? normalizeEncryptedContent(message.content) : sanitizeText(message.content, 2000),
+              timestamp: message.timestamp,
+              edited: Boolean(message.edited),
+              encrypted,
+              iv: encrypted ? normalizeIv(message.iv) : "",
+            };
+          })
       : [];
 
     this.messagesBySession.set(sessionId, nextBucket);
   }
 
-  addMessage({ sessionId, userId, content }) {
+  addMessage({ sessionId, userId, content, encrypted = false, iv = "" }) {
     if (!sessionId || !userId) {
       throw createError("Invalid message payload.", "INVALID_MESSAGE_PAYLOAD");
     }
 
-    const cleanContent = sanitizeText(content, 2000);
-
-    if (!cleanContent) {
-      throw createError("Message content cannot be empty.", "EMPTY_MESSAGE");
-    }
-
-    const bucket = this._ensureSessionBucket(sessionId);
-
+    const encryptedMessage = Boolean(encrypted);
     const message = {
       id: uuidv4(),
       userId,
       sessionId,
-      content: cleanContent,
+      content: encryptedMessage ? normalizeEncryptedContent(content) : normalizePlainContent(content),
       timestamp: new Date().toISOString(),
       edited: false,
+      encrypted: encryptedMessage,
+      iv: encryptedMessage ? normalizeIv(iv) : "",
     };
 
+    const bucket = this._ensureSessionBucket(sessionId);
     bucket.push(message);
 
     if (bucket.length > this.maxMessages) {
@@ -82,7 +120,7 @@ class MessageManager {
     return { ...message };
   }
 
-  editMessage({ sessionId, messageId, userId, content }) {
+  editMessage({ sessionId, messageId, userId, content, encrypted = false, iv = "" }) {
     const bucket = this._ensureSessionBucket(sessionId);
     const messageIndex = bucket.findIndex((message) => message.id === messageId);
 
@@ -100,14 +138,12 @@ class MessageManager {
       throw createError("Edit window expired (10 minutes).", "EDIT_WINDOW_EXPIRED");
     }
 
-    const cleanContent = sanitizeText(content, 2000);
+    const encryptedMessage = Boolean(encrypted);
 
-    if (!cleanContent) {
-      throw createError("Message content cannot be empty.", "EMPTY_MESSAGE");
-    }
-
-    target.content = cleanContent;
+    target.content = encryptedMessage ? normalizeEncryptedContent(content) : normalizePlainContent(content);
     target.edited = true;
+    target.encrypted = encryptedMessage;
+    target.iv = encryptedMessage ? normalizeIv(iv) : "";
 
     return { ...target };
   }

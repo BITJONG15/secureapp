@@ -1,6 +1,6 @@
-# SecureChat
+# SecureChat v2
 
-Real-time secure chat web app with public and private sessions.
+Anonymous real-time chat with ephemeral private sessions, participant control, and client-side encrypted private messaging.
 
 ## Run Local
 
@@ -9,30 +9,46 @@ npm install
 npm run dev
 ```
 
-## Render-Only Deployment (Frontend + Backend)
+Open `http://localhost:3000`.
 
-This project is configured to run as a single Render Web Service:
-- Express serves `public/`
-- Socket.IO runs on the same origin
+## Core Features
 
-### Deploy Steps
+- Persistent anonymous identity (`user_xxxxx` + password) stored in browser.
+- General room (`general`) with clickable user IDs to request direct private session.
+- Two private session modes:
+  - `direct`: consent-based, 2 participants, 60 minutes, no password.
+  - `custom`: creator-defined duration (5-1440) + participant limit (2-50), password protected.
+- Creator controls for custom sessions:
+  - kick participant
+  - update remaining duration
+- Panic reset:
+  - delete current identity data (messages + creator sessions)
+  - rotate to a new identity instantly
+- Anti-bruteforce behavior:
+  - after repeated identity password failures, creator sessions/messages are purged.
+- Private message encryption on client side (AES-GCM key per private session).
+
+## Render Deployment (single service)
+
+This app is configured for one Render Web Service (frontend + backend together):
 
 1. Push repository to GitHub.
-2. In Render: `New +` -> `Web Service` -> connect this repo.
+2. On Render: `New` -> `Web Service` -> connect repo.
 3. Use:
 - `Build Command`: `npm ci`
 - `Start Command`: `npm start`
-- `Plan`: `Free`
-4. Set environment variables:
+4. Environment:
 - `NODE_ENV=production`
 - `CORS_ORIGINS=*`
 - `SESSION_LINK_BASE_URL=https://your-service-name.onrender.com`
-5. Deploy and verify health endpoint:
+5. Deploy and verify:
 - `https://your-service-name.onrender.com/health`
 
-You can also deploy from `render.yaml`.
+`render.yaml` is included.
 
 ## Environment
+
+Use `.env.example` as baseline.
 
 ```env
 PORT=3000
@@ -53,21 +69,11 @@ FIREBASE_WEB_MESSAGING_SENDER_ID=
 FIREBASE_WEB_APP_ID=
 ```
 
-## Firebase Setup (Optional)
+## Firebase (optional persistence)
 
-1. Create a Firebase project and enable Firestore.
-2. Create a service account key (`Project Settings > Service accounts`).
-3. Set in `.env`:
-- `FIREBASE_ENABLED=true`
-- one credential option:
-- `FIREBASE_SERVICE_ACCOUNT_JSON` (full JSON string), or
-- `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY` (keep `\\n` escapes), or
-- `GOOGLE_APPLICATION_CREDENTIALS` (path to service account JSON file)
+Set `FIREBASE_ENABLED=true` and provide one credential mode:
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
+- or `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`
+- or `GOOGLE_APPLICATION_CREDENTIALS`
 
-## Features
-
-- General persistent public session (`general`)
-- Private sessions with duration and participant limits
-- Real-time messaging with edit window (10 minutes)
-- Message deletion and capped message history (100/session)
-- Frontend security controls and responsive UI
+When enabled, message storage/hydration uses Firestore.

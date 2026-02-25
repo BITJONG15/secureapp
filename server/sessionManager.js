@@ -1,4 +1,4 @@
-﻿const {
+const {
   buildSessionLink,
   generatePassword,
   generatePrivateSessionId,
@@ -8,12 +8,18 @@
 
 const GENERAL_SESSION_ID = "general";
 const EMPTY_GRACE_MS = 60 * 1000;
-const CLEANUP_INTERVAL_MS = 30 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+const DIRECT_PRIVATE_DURATION_MINUTES = 60;
+const DIRECT_PRIVATE_PARTICIPANT_LIMIT = 2;
 
 function createError(message, code) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function uniqueUserList(participantsMap) {
+  return Array.from(new Set(participantsMap.values()));
 }
 
 class SessionManager {
@@ -41,10 +47,13 @@ class SessionManager {
     this.sessions.set(GENERAL_SESSION_ID, {
       id: GENERAL_SESSION_ID,
       type: "public",
+      mode: "general",
+      joinMode: "open",
       persistent: true,
       maxParticipants: null,
       durationMinutes: null,
       password: null,
+      creatorUserId: null,
       createdAt: nowIso,
       expiresAt: null,
       link: buildSessionLink(GENERAL_SESSION_ID, this.sessionLinkBase),
@@ -52,12 +61,55 @@ class SessionManager {
     });
   }
 
+  _generateUniquePrivateSessionId() {
+    let sessionId = generatePrivateSessionId();
+
+    while (this.sessions.has(sessionId)) {
+      sessionId = generatePrivateSessionId();
+    }
+
+    return sessionId;
+  }
+
+  _buildPrivateSession({
+    creatorUserId,
+    durationMinutes,
+    maxParticipants,
+    mode,
+    joinMode,
+    password,
+  }) {
+    const sessionId = this._generateUniquePrivateSessionId();
+    const now = Date.now();
+
+    const session = {
+      id: sessionId,
+      type: "private",
+      mode,
+      joinMode,
+      persistent: false,
+      maxParticipants,
+      durationMinutes,
+      password: joinMode === "password" ? password : null,
+      creatorUserId,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + durationMinutes * 60 * 1000).toISOString(),
+      link: buildSessionLink(sessionId, this.sessionLinkBase),
+      participants: new Map(),
+    };
+
+    this.sessions.set(sessionId, session);
+    this._scheduleDurationExpiry(sessionId, durationMinutes * 60 * 1000);
+
+    return session;
+  }
+
   _scheduleDurationExpiry(sessionId, delayMs) {
     this._clearExpiryTimer(sessionId);
 
     const timeout = setTimeout(() => {
       this.expireSession(sessionId, "duration-reached");
-    }, delayMs);
+    }, Math.max(500, delayMs));
 
     if (typeof timeout.unref === "function") {
       timeout.unref();
@@ -99,19 +151,23 @@ class SessionManager {
   }
 
   _toClientSession(session, includeSensitive = false) {
-    const users = Array.from(new Set(session.participants.values()));
+    const users = uniqueUserList(session.participants);
 
     const response = {
       id: session.id,
       type: session.type,
+      mode: session.mode,
+      joinMode: session.joinMode,
       persistent: session.persistent,
       maxParticipants: session.maxParticipants,
       durationMinutes: session.durationMinutes,
+      creatorUserId: session.creatorUserId,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       link: session.link,
       participantCount: users.length,
       participants: users,
+      encrypted: session.type === "private",
     };
 
     if (includeSensitive && session.password) {
@@ -121,40 +177,78 @@ class SessionManager {
     return response;
   }
 
-  createPrivateSession({ durationMinutes, maxParticipants }) {
-    const duration = validateDurationMinutes(durationMinutes);
-    const participantLimit = validateMaxParticipants(maxParticipants);
-
-    let sessionId = generatePrivateSessionId();
-
-    while (this.sessions.has(sessionId)) {
-      sessionId = generatePrivateSessionId();
+  createCustomPrivateSession({ durationMinutes, maxParticipants, creatorUserId }) {
+    if (!creatorUserId) {
+      throw createError("Creator is required.", "CREATOR_REQUIRED");
     }
 
+    const duration = validateDurationMinutes(durationMinutes);
+    const participantLimit = validateMaxParticipants(maxParticipants);
     const password = generatePassword();
-    const now = Date.now();
 
-    const session = {
-      id: sessionId,
-      type: "private",
-      persistent: false,
-      maxParticipants: participantLimit,
+    const session = this._buildPrivateSession({
+      creatorUserId,
       durationMinutes: duration,
+      maxParticipants: participantLimit,
+      mode: "custom",
+      joinMode: "password",
       password,
-      createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + duration * 60 * 1000).toISOString(),
-      link: buildSessionLink(sessionId, this.sessionLinkBase),
-      participants: new Map(),
-    };
-
-    this.sessions.set(sessionId, session);
-    this._scheduleDurationExpiry(sessionId, duration * 60 * 1000);
+    });
 
     return {
       session: this._toClientSession(session, true),
       password,
       link: session.link,
     };
+  }
+
+  createDirectPrivateSession({ requesterUserId, targetUserId }) {
+    if (!requesterUserId || !targetUserId) {
+      throw createError("Invalid private request payload.", "INVALID_PRIVATE_REQUEST");
+    }
+
+    const session = this._buildPrivateSession({
+      creatorUserId: requesterUserId,
+      durationMinutes: DIRECT_PRIVATE_DURATION_MINUTES,
+      maxParticipants: DIRECT_PRIVATE_PARTICIPANT_LIMIT,
+      mode: "direct",
+      joinMode: "consent",
+      password: null,
+    });
+
+    session.allowedUsers = new Set([requesterUserId, targetUserId]);
+
+    return {
+      session: this._toClientSession(session, false),
+      link: session.link,
+      password: null,
+    };
+  }
+
+  updateSessionDuration({ sessionId, actorUserId, durationMinutes }) {
+    const session = this.sessions.get(sessionId);
+
+    if (!session) {
+      throw createError("Session not found.", "SESSION_NOT_FOUND");
+    }
+
+    if (session.persistent) {
+      throw createError("General session cannot be updated.", "FORBIDDEN");
+    }
+
+    if (session.creatorUserId !== actorUserId) {
+      throw createError("Only the session creator can update duration.", "FORBIDDEN");
+    }
+
+    const duration = validateDurationMinutes(durationMinutes);
+    const nextExpiresAt = new Date(Date.now() + duration * 60 * 1000).toISOString();
+
+    session.durationMinutes = duration;
+    session.expiresAt = nextExpiresAt;
+
+    this._scheduleDurationExpiry(sessionId, duration * 60 * 1000);
+
+    return this._toClientSession(session, false);
   }
 
   joinSession({ sessionId, socketId, userId, password }) {
@@ -168,14 +262,20 @@ class SessionManager {
       throw createError("Invalid join payload.", "INVALID_JOIN_PAYLOAD");
     }
 
-    if (session.type === "private") {
-      if (session.password !== password) {
+    if (!session.persistent && session.allowedUsers && !session.allowedUsers.has(userId)) {
+      throw createError("This direct private session is restricted.", "FORBIDDEN");
+    }
+
+    if (session.joinMode === "password") {
+      if (!password || session.password !== password) {
         throw createError("Wrong password.", "WRONG_PASSWORD");
       }
+    }
 
-      if (!session.participants.has(socketId) && session.participants.size >= session.maxParticipants) {
-        throw createError("Session is full.", "SESSION_FULL");
-      }
+    const currentParticipants = uniqueUserList(session.participants);
+
+    if (!session.participants.has(socketId) && session.maxParticipants && currentParticipants.length >= session.maxParticipants) {
+      throw createError("Session is full.", "SESSION_FULL");
     }
 
     session.participants.set(socketId, userId);
@@ -198,7 +298,7 @@ class SessionManager {
       return null;
     }
 
-    if (session.type === "private" && session.participants.size === 0) {
+    if (session.type === "private" && uniqueUserList(session.participants).length === 0) {
       this._scheduleEmptyExpiry(sessionId);
     }
 
@@ -206,6 +306,63 @@ class SessionManager {
       userId: existingUser,
       session: this._toClientSession(session, false),
     };
+  }
+
+  removeUserFromSession(sessionId, targetUserId) {
+    const session = this.sessions.get(sessionId);
+
+    if (!session || !targetUserId) {
+      return [];
+    }
+
+    const removed = [];
+
+    for (const [socketId, participantUserId] of Array.from(session.participants.entries())) {
+      if (participantUserId !== targetUserId) {
+        continue;
+      }
+
+      session.participants.delete(socketId);
+      removed.push({
+        sessionId,
+        socketId,
+        userId: targetUserId,
+      });
+    }
+
+    if (session.type === "private" && uniqueUserList(session.participants).length === 0) {
+      this._scheduleEmptyExpiry(sessionId);
+    }
+
+    return removed;
+  }
+
+  kickParticipant({ sessionId, actorUserId, targetUserId }) {
+    const session = this.sessions.get(sessionId);
+
+    if (!session) {
+      throw createError("Session not found.", "SESSION_NOT_FOUND");
+    }
+
+    if (session.persistent) {
+      throw createError("Cannot kick users from general session.", "FORBIDDEN");
+    }
+
+    if (session.creatorUserId !== actorUserId) {
+      throw createError("Only the creator can kick participants.", "FORBIDDEN");
+    }
+
+    if (actorUserId === targetUserId) {
+      throw createError("Creator cannot kick self.", "FORBIDDEN");
+    }
+
+    const removedParticipants = this.removeUserFromSession(sessionId, targetUserId);
+
+    if (removedParticipants.length === 0) {
+      throw createError("Participant not found in this session.", "PARTICIPANT_NOT_FOUND");
+    }
+
+    return removedParticipants;
   }
 
   getParticipantSnapshot(sessionId) {
@@ -218,7 +375,7 @@ class SessionManager {
       };
     }
 
-    const participants = Array.from(new Set(session.participants.values()));
+    const participants = uniqueUserList(session.participants);
 
     return {
       participantCount: participants.length,
@@ -236,7 +393,12 @@ class SessionManager {
     return session.participants.get(socketId) || null;
   }
 
-  removeUserFromAllSessions(userId) {
+  isCreator(sessionId, userId) {
+    const session = this.sessions.get(sessionId);
+    return Boolean(session && !session.persistent && session.creatorUserId === userId);
+  }
+
+  removeUserParticipations(userId, { skipCreatorOwnedSessions = false } = {}) {
     if (!userId) {
       return [];
     }
@@ -244,29 +406,60 @@ class SessionManager {
     const removedParticipants = [];
 
     for (const session of this.sessions.values()) {
-      for (const [socketId, participantUserId] of Array.from(session.participants.entries())) {
-        if (participantUserId !== userId) {
-          continue;
-        }
-
-        session.participants.delete(socketId);
-        removedParticipants.push({
-          sessionId: session.id,
-          socketId,
-          userId,
-        });
+      if (skipCreatorOwnedSessions && session.creatorUserId === userId) {
+        continue;
       }
 
-      if (session.type === "private" && session.participants.size === 0) {
-        this._scheduleEmptyExpiry(session.id);
+      const removedFromSession = this.removeUserFromSession(session.id, userId);
+
+      if (removedFromSession.length > 0) {
+        removedParticipants.push(...removedFromSession);
       }
     }
 
     return removedParticipants;
   }
 
-  getSessionsList() {
-    const sessions = Array.from(this.sessions.values()).map((session) => this._toClientSession(session, false));
+  expireSessionsByCreator(creatorUserId, reason = "creator-reset") {
+    const expiredPayloads = [];
+
+    for (const session of Array.from(this.sessions.values())) {
+      if (session.persistent) {
+        continue;
+      }
+
+      if (session.creatorUserId !== creatorUserId) {
+        continue;
+      }
+
+      const payload = this.expireSession(session.id, reason);
+
+      if (payload) {
+        expiredPayloads.push(payload);
+      }
+    }
+
+    return expiredPayloads;
+  }
+
+  getSessionsList({ userId } = {}) {
+    const sessions = Array.from(this.sessions.values())
+      .filter((session) => {
+        if (session.persistent) {
+          return true;
+        }
+
+        if (!userId) {
+          return false;
+        }
+
+        if (session.creatorUserId === userId) {
+          return true;
+        }
+
+        return uniqueUserList(session.participants).includes(userId);
+      })
+      .map((session) => this._toClientSession(session, false));
 
     sessions.sort((a, b) => {
       if (a.id === GENERAL_SESSION_ID) {
@@ -309,6 +502,7 @@ class SessionManager {
       sessionId,
       participants,
       session: this._toClientSession(session, false),
+      creatorUserId: session.creatorUserId,
     };
 
     this.onSessionExpired(payload);
@@ -334,6 +528,7 @@ class SessionManager {
 }
 
 module.exports = {
+  DIRECT_PRIVATE_DURATION_MINUTES,
   GENERAL_SESSION_ID,
   SessionManager,
   createSessionError: createError,

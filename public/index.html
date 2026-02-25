@@ -1,10 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Entre-Nous</title>
-    <meta name="description" content="Messagerie securisee en temps reel" />
+    <title>SecureChat v2</title>
+    <meta name="description" content="Messagerie anonyme securisee en temps reel" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -27,8 +27,8 @@
         <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20 text-blue-300">
           <i class="fa-solid fa-shield-halved text-2xl"></i>
         </div>
-        <h1 class="mb-2 text-xl font-semibold tracking-wide">NO-NAME</NO-NAME></h1>
-        <p id="bootStatus" class="text-sm text-slate-300">Initialisation de l'environnement securise...</p>
+        <h1 class="mb-2 text-xl font-semibold tracking-wide">SecureChat v2</h1>
+        <p id="bootStatus" class="text-sm text-slate-300">Initialisation securisee...</p>
         <div class="mt-5 h-2 overflow-hidden rounded-full bg-slate-700/70">
           <div id="bootProgress" class="h-full w-0 rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-700"></div>
         </div>
@@ -55,9 +55,32 @@
             </button>
           </div>
 
-          <div class="mb-4 rounded-xl border border-white/10 bg-slate-900/30 p-3">
-            <div class="text-xs uppercase tracking-wide text-slate-400">Identifiant utilisateur</div>
-            <div id="userIdDisplay" class="font-mono-ui mt-1 text-sm text-blue-300"></div>
+          <div class="mb-4 space-y-2 rounded-xl border border-white/10 bg-slate-900/30 p-3">
+            <div>
+              <div class="text-[11px] uppercase tracking-wide text-slate-400">Identifiant</div>
+              <div id="userIdDisplay" class="font-mono-ui mt-1 text-xs text-blue-300"></div>
+            </div>
+            <div>
+              <div class="text-[11px] uppercase tracking-wide text-slate-400">Mot de passe</div>
+              <div id="userPasswordDisplay" class="font-mono-ui mt-1 text-xs text-emerald-300"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button
+                id="copyIdentityBtn"
+                type="button"
+                data-allow-copy="true"
+                class="rounded-lg border border-slate-400/40 bg-slate-600/20 px-2 py-1.5 text-[11px] text-slate-100"
+              >
+                <i class="fa-solid fa-copy mr-1"></i>Copier
+              </button>
+              <button
+                id="panicResetBtn"
+                type="button"
+                class="rounded-lg border border-rose-400/40 bg-rose-500/20 px-2 py-1.5 text-[11px] text-rose-100"
+              >
+                <i class="fa-solid fa-bomb mr-1"></i>Panic
+              </button>
+            </div>
           </div>
 
           <div class="mb-4 grid grid-cols-2 gap-2">
@@ -67,7 +90,7 @@
               class="rounded-lg border border-blue-400/40 bg-blue-500/20 px-2 py-2 text-xs text-blue-200 transition hover:scale-[1.02]"
             >
               <i class="fa-solid fa-folder-plus"></i>
-              <span class="ml-1 hidden sm:inline">Privee</span>
+              <span class="ml-1 hidden sm:inline">Creer</span>
             </button>
             <button
               id="openJoinModalBtn"
@@ -80,6 +103,30 @@
           </div>
 
           <ul id="sessionsList" class="space-y-2"></ul>
+
+          <section id="participantManager" class="mt-4 hidden rounded-xl border border-white/10 bg-slate-900/30 p-3">
+            <div id="participantManagerTitle" class="mb-2 text-xs uppercase tracking-wide text-slate-300"></div>
+            <ul id="participantManagerList" class="space-y-1"></ul>
+
+            <div id="updateDurationBlock" class="mt-3 hidden border-t border-white/10 pt-3">
+              <form id="updateDurationForm" class="flex items-center gap-2">
+                <input
+                  id="updateDurationInput"
+                  type="number"
+                  min="5"
+                  max="1440"
+                  value="30"
+                  class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-2 py-1.5 text-xs outline-none focus:border-blue-400/70"
+                />
+                <button
+                  type="submit"
+                  class="rounded-lg border border-amber-400/40 bg-amber-500/20 px-2 py-1.5 text-[11px] text-amber-100"
+                >
+                  Duree
+                </button>
+              </form>
+            </div>
+          </section>
         </aside>
 
         <section class="glass-panel flex min-w-0 flex-1 flex-col rounded-2xl">
@@ -93,14 +140,17 @@
                 <p id="participantsInfo" class="text-xs text-slate-400">0 participants</p>
               </div>
             </div>
-            <button
-              id="leaveSessionBtn"
-              type="button"
-              class="rounded-lg border border-rose-400/40 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-200 transition hover:scale-[1.02]"
-            >
-              <i class="fa-solid fa-arrow-right-from-bracket"></i>
-              <span class="ml-1 hidden sm:inline">Quitter</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <span id="encryptionBadge" class="encryption-badge rounded-full border border-slate-500/40 bg-slate-700/30 px-2 py-1 text-[11px] uppercase tracking-wide text-slate-300">E2EE: inactive</span>
+              <button
+                id="leaveSessionBtn"
+                type="button"
+                class="rounded-lg border border-rose-400/40 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-200 transition hover:scale-[1.02]"
+              >
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                <span class="ml-1 hidden sm:inline">Quitter</span>
+              </button>
+            </div>
           </header>
 
           <main id="messagesContainer" class="flex-1 space-y-2 overflow-y-auto px-3 py-4 md:px-5"></main>
@@ -204,6 +254,15 @@
               required
             />
           </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Cle E2EE (optionnelle mais recommandee)</span>
+            <input
+              id="joinE2eeKeyInput"
+              type="text"
+              data-allow-copy="true"
+              class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-xs font-mono-ui outline-none focus:border-violet-400/70"
+            />
+          </label>
           <button
             type="submit"
             class="w-full rounded-lg border border-violet-400/50 bg-violet-500/25 px-3 py-2 text-sm text-violet-100 transition hover:scale-[1.01]"
@@ -270,6 +329,22 @@
                 class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-xs font-mono-ui text-slate-100 outline-none"
               />
               <button id="copyPasswordBtn" type="button" class="rounded-lg border border-violet-400/40 bg-violet-500/20 px-3 py-2 text-xs text-violet-100">
+                <i class="fa-solid fa-copy"></i>
+              </button>
+            </div>
+          </label>
+
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-300">Cle E2EE</span>
+            <div class="flex gap-2">
+              <input
+                id="shareE2eeKeyInput"
+                type="text"
+                readonly
+                data-allow-copy="true"
+                class="w-full rounded-lg border border-white/15 bg-slate-900/40 px-3 py-2 text-xs font-mono-ui text-slate-100 outline-none"
+              />
+              <button id="copyE2eeBtn" type="button" class="rounded-lg border border-cyan-400/40 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100">
                 <i class="fa-solid fa-copy"></i>
               </button>
             </div>
